@@ -4,7 +4,7 @@
 
 	<groupId>imperial.modaclouds.fg</groupId>
 	<artifactId>hdb2ldb</artifactId>
-	<version>0.0.1-SNAPSHOT</version>
+	<version>1.0.0</version>
 	<packaging>jar</packaging>
 
 	<name>hdb2ldb</name>

@@ -62,6 +62,8 @@ public class HDBQuery implements Runnable
 	private int interval;
 
 	private Thread hdbt;
+	
+	private String[] metrics = null;
 
 	private static final String URI = "http://www.modaclouds.eu/rdfs/1.0/monitoringdata#";
 	public OntModel model = ModelFactory.createOntologyModel(OntModelSpec.RDFS_MEM);
@@ -78,10 +80,11 @@ public class HDBQuery implements Runnable
 
 	private DatasetAccessor accessor = null; 
 	
-	public HDBQuery(String HDBIP, String ldbURI, String interval) {
+	public HDBQuery(String HDBIP, String ldbURI, String[] metrics, int interval) {
 		this.HDBIP = HDBIP;
 		this.ldbURI = ldbURI;
-		this.interval = Integer.valueOf(interval);
+		this.interval = interval;
+		this.metrics = metrics;
 
 		if (execService == null) {
 			execService = Executors.newCachedThreadPool();
@@ -97,20 +100,21 @@ public class HDBQuery implements Runnable
 
 		while (!hdbt.isInterrupted()) {
 
-			String jsonMessage;
-			jsonMessage = obtainData("CPUUtil");
-			saveToLocalDB(jsonMessage);
+			long t0 = System.currentTimeMillis();
 			
-			jsonMessage = obtainData("ResponseInfo");
-			saveToLocalDB(jsonMessage);
+			for (String metric: metrics) {
+				String jsonMessage;
+				jsonMessage = obtainData(metric);
+				saveToLocalDB(jsonMessage);
+			}
 
+			long t1 = System.currentTimeMillis();
 			try {
-				Thread.sleep(5*60*1000);
+				Thread.sleep(Math.max(0, interval*1000-(t1-t0)));
 			} catch (InterruptedException e) {
 				Thread.currentThread().interrupt();
 				break;
 			}
-
 		}
 	}
 
@@ -170,7 +174,7 @@ public class HDBQuery implements Runnable
 						System.out.println(metricName);
 						
 						execService.execute(new AddExecutor(graphInitial+graph, m));
-						
+						Thread.sleep(100);
 //						System.out.println(execService.getActiveCount());
 //						if (execService.getActiveCount() <= maxThreads) {
 //							execService.execute(new AddExecutor(graphInitial+graph, m));
@@ -182,7 +186,7 @@ public class HDBQuery implements Runnable
 						
 						//accessor.add(graphInitial+graph,m);
 
-						Thread.sleep(interval);
+						//Thread.sleep(interval);
 					}
 				}
 
@@ -209,10 +213,10 @@ public class HDBQuery implements Runnable
 					timestamps = temp;
 				}
 			}
-			execService.submit(new AddExecutor("default", defaultGraphStatement(graphInitial,Long.valueOf(graph))));
+			if (graph != null) {
+				execService.submit(new AddExecutor("default", defaultGraphStatement(graphInitial,Long.valueOf(graph))));
+			}
 		} catch (ParseException e) {
-			e.printStackTrace();
-		} catch (InterruptedException e) {
 			e.printStackTrace();
 		} catch (Exception e) {
 			e.printStackTrace();
@@ -229,7 +233,7 @@ public class HDBQuery implements Runnable
 		}
 		
 		long tnow = System.currentTimeMillis();
-		long tstart = tnow - 5*60*1000;
+		long tstart = tnow - interval*1000;
 		
 //		String sparqlQuery = "SELECT ?g ?s ?p ?o WHERE { GRAPH ?g { ?s ?p ?o} GRAPH ?g { ?s "
 //				+ "<http://www.modaclouds.eu/rdfs/1.0/monitoringdata#timestamp> ?t "
@@ -239,10 +243,18 @@ public class HDBQuery implements Runnable
 		
 		String sparqlQuery = "SELECT ?g ?s ?p ?o WHERE { GRAPH ?g { ?s ?p ?o} GRAPH ?g { ?s "
 				+ "<http://www.modaclouds.eu/rdfs/1.0/monitoringdata#timestamp> ?t "
-				+ "FILTER (?t >= " + "1412772000000" + "&& ?t <= " + "1412775000000" + ") . ?s "
+				+ "FILTER (?t >= " + "1412769600000" + "&& ?t <= " + "1412775000000" + ") . ?s "
 				+ "<http://www.modaclouds.eu/rdfs/1.0/monitoringdata#metric> \""
 				+ metricnameHDB + "\"^^<http://www.w3.org/2001/XMLSchema#string> } }";
 		
+		System.out.println(sparqlQuery);
+		
+//		String sparqlQuery = "SELECT ?g ?s ?p ?o WHERE { GRAPH ?g { ?s ?p ?o} GRAPH ?g { ?s "
+//				+ "<http://www.modaclouds.eu/rdfs/1.0/monitoringdata#timestamp> ?t "
+//				+ "FILTER (?t >= " + tstart + "&& ?t <= " + tnow + ") . ?s "
+//				+ "<http://www.modaclouds.eu/rdfs/1.0/monitoringdata#metric> \""
+//				+ metricnameHDB + "\"^^<http://www.w3.org/2001/XMLSchema#string> } }";
+//		
 		Query query = QueryFactory.create(sparqlQuery, Syntax.syntaxARQ);
 
 		QueryExecution qexec = QueryExecutionFactory.sparqlService(HDBIP, query); 
